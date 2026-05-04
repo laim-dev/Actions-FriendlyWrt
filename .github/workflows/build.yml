@@ -1,12 +1,11 @@
 name: Build FriendlyWrt
 
 on:
-  watch:
+  workflow_dispatch: 
     types: started
 jobs:
   prepare_release:
     runs-on: ubuntu-22.04
-    if: github.event.repository.owner.id == github.event.sender.id
     steps:
     - name: Get release tag
       id: release_tag
