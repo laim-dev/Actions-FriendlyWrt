@@ -6,6 +6,8 @@ on:
 jobs:
   prepare_release:
     runs-on: ubuntu-22.04
+  prepare_release:
+    contents: write
     steps:
     - name: Get release tag
       id: release_tag
