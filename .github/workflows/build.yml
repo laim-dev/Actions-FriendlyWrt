@@ -38,12 +38,25 @@ jobs:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     strategy:
       matrix:
-        VERSION: ['25.12', '24.10']
-        SET: [docker, non-docker]
+        VERSION: ['24.10']
+        SET: [docker]
 
     steps:
     - name: Checkout
       uses: actions/checkout@v4
+
+    # ==================== 开启缓存（关键）====================
+    - name: Cache build cache
+      uses: actions/cache@v3
+      with:
+        path: |
+          project/friendlywrt/dl
+          project/friendlywrt/build_dir
+          project/friendlywrt/staging_dir
+        key: ${{ runner.os }}-friendlywrt-${{ matrix.VERSION }}-${{ matrix.SET }}
+        restore-keys: |
+          ${{ runner.os }}-friendlywrt-${{ matrix.VERSION }}-
+    # =======================================================
 
     - name: Initialization environment
       env:
@@ -134,55 +147,12 @@ jobs:
               ${FRIENDLYWRT_SRC}/${FRIENDLYWRT_PACKAGE_DIR}
         echo "rootfs_filename=$rootfs_filename" >> $GITHUB_OUTPUT
 
-    - name: Create host package-manager bundle
-      id: create_host_pm_package
-      if: matrix.SET == 'non-docker'
-      run: |
-        cd project
-        source .current_config.mk
-        PM_BIN=
-        [ -f ${FRIENDLYWRT_SRC}/staging_dir/host/bin/apk ]  && PM_BIN=${FRIENDLYWRT_SRC}/staging_dir/host/bin/apk
-        [ -f ${FRIENDLYWRT_SRC}/staging_dir/host/bin/opkg ] && PM_BIN=${FRIENDLYWRT_SRC}/staging_dir/host/bin/opkg
-        if [ -z "$PM_BIN" ]; then
-          echo "ERROR: neither apk nor opkg found under ${FRIENDLYWRT_SRC}/staging_dir/host/bin/"
-          exit 1
-        fi
-        echo "Detected host package manager: $PM_BIN"
-
-        ldd_out=$(ldd "$PM_BIN" 2>&1 || true)
-        echo "$ldd_out"
-        if ! echo "$ldd_out" | grep -q "not a dynamic executable"; then
-          bad_paths=$(echo "$ldd_out" | grep -oE '=> /[^ ]+' | sed 's|=> ||' \
-                       | grep -vE '^/(lib|lib64|usr/lib)/' || true)
-          not_found=$(echo "$ldd_out" | grep -F "not found" || true)
-          if [ -n "$bad_paths" ] || [ -n "$not_found" ]; then
-            echo "ERROR: $PM_BIN has non-portable dynamic dependencies:"
-            [ -n "$bad_paths" ] && { echo "non-system paths:"; echo "$bad_paths"; }
-            [ -n "$not_found" ] && { echo "unresolved:"; echo "$not_found"; }
-            exit 1
-          fi
-        fi
-
-        host_pm_filename="host-pm-${{ matrix.VERSION }}.tgz"
-        tar czf ../artifact/${host_pm_filename} "$PM_BIN"
-        echo "host_pm_filename=$host_pm_filename" >> $GITHUB_OUTPUT
-
     - name: Upload rootfs package
       uses: svenstaro/upload-release-action@v2
       with:
         repo_token: ${{ secrets.GITHUB_TOKEN }}
         file: ./artifact/${{ steps.create_rootfs_package.outputs.rootfs_filename }}
         asset_name: ${{ steps.create_rootfs_package.outputs.rootfs_filename }}
-        tag: ${{ needs.prepare_release.outputs.release_tag }}
-        overwrite: true
-
-    - name: Upload host package-manager bundle
-      if: matrix.SET == 'non-docker'
-      uses: svenstaro/upload-release-action@v2
-      with:
-        repo_token: ${{ secrets.GITHUB_TOKEN }}
-        file: ./artifact/${{ steps.create_host_pm_package.outputs.host_pm_filename }}
-        asset_name: ${{ steps.create_host_pm_package.outputs.host_pm_filename }}
         tag: ${{ needs.prepare_release.outputs.release_tag }}
         overwrite: true
 
@@ -194,12 +164,25 @@ jobs:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     strategy:
       matrix:
-        VERSION: ['25.12', '24.10']
+        VERSION: ['24.10']
         CPU: [rk3328, rk3528, rk3399, rk3566, rk3568, rk3576, rk3588]
-        SET: [docker, non-docker]
+        SET: [docker]
     steps:
     - name: Checkout
       uses: actions/checkout@v4
+
+    # ==================== 开启缓存（关键）====================
+    - name: Cache build cache
+      uses: actions/cache@v3
+      with:
+        path: |
+          project/kernel
+          project/u-boot
+          project/rkbin
+        key: ${{ runner.os }}-img-${{ matrix.VERSION }}-${{ matrix.CPU }}-${{ matrix.SET }}
+        restore-keys: |
+          ${{ runner.os }}-img-${{ matrix.VERSION }}-${{ matrix.CPU }}-
+    # =======================================================
 
     - name: Initialization environment
       env:
@@ -239,18 +222,7 @@ jobs:
         repo sync -c scripts/sd-fuse  --no-clone-bundle
         repo sync -c toolchain  --no-clone-bundle
 
-    - name: Download friendlywrt rootfs (non-docker)
-      if: matrix.SET == 'non-docker'
-      uses: robinraju/release-downloader@v1.6
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        repository: ${{ github.repository }}
-        tag: ${{ needs.prepare_release.outputs.release_tag }}
-        fileName: "rootfs-friendlywrt-${{ matrix.VERSION }}.tgz"
-
     - name: Download friendlywrt rootfs (docker)
-      if: matrix.SET == 'docker'
       uses: robinraju/release-downloader@v1.6
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -258,15 +230,6 @@ jobs:
         repository: ${{ github.repository }}
         tag: ${{ needs.prepare_release.outputs.release_tag }}
         fileName: "rootfs-friendlywrt-${{ matrix.VERSION }}-docker.tgz"
-
-    - name: Download host package-manager bundle
-      uses: robinraju/release-downloader@v1.6
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        repository: ${{ github.repository }}
-        tag: ${{ needs.prepare_release.outputs.release_tag }}
-        fileName: "host-pm-${{ matrix.VERSION }}.tgz"
 
     - name: Prepare config
       id: config
@@ -323,26 +286,11 @@ jobs:
         SUFFIX="${{ steps.config.outputs.suffix }}"
         tar xzf "../rootfs-friendlywrt-${{ matrix.VERSION }}${SUFFIX}.tgz"
 
-    - name: Unpack host package-manager bundle
-      run: |
-        cd project
-        tar xzf "../host-pm-${{ matrix.VERSION }}.tgz"
-
     - name: Compile uboot and kernel
       run: |
         cd project
-        ## If you need to modify the kernel configuration, please edit the script below
-        # source ../scripts/custome_kernel_config.sh
-
         ./build.sh uboot
         ./build.sh kernel
-
-        ## If you want to compile a driver from source, here is an example
-        # case ${{ matrix.CPU }} in
-        # rk3568)
-        #     ../scripts/3rd/add_r8125.sh
-        #     ;;
-        # esac
 
     - name: Build sd image
       id: build_sd_image
@@ -351,13 +299,7 @@ jobs:
         ./build.sh sd-img
         mv out/${{ steps.config.outputs.img_filename }} ../artifact/
 
-        # package images-xyz.tgz
         pushd scripts/sd-fuse/ > /dev/null
-        if [ ! -d "${{ steps.config.outputs.dist_dir }}" ]; then
-            echo "ERROR: image directory ${{ steps.config.outputs.dist_dir }} not found under scripts/sd-fuse/"
-            ls -la
-            exit 1
-        fi
         archive_dir="${{ steps.config.outputs.dist_dir }}-${{ matrix.CPU }}"
         mv "${{ steps.config.outputs.dist_dir }}" "${archive_dir}"
         tar czf "${{ steps.config.outputs.archive_filename }}" "${archive_dir}"
