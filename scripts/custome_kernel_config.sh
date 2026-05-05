@@ -15,4 +15,14 @@ for CFG in "${CONFIGS[@]}"; do
   else
     echo "$CFG" >> "${KCFG}"
   fi
+  # 开启DAE所需的eBPF/BTF支持
+echo "CONFIG_BPF=y" >> .config
+echo "CONFIG_BPF_SYSCALL=y" >> .config
+echo "CONFIG_BPF_JIT=y" >> .config
+echo "CONFIG_BPF_STREAM_PARSER=y" >> .config
+echo "CONFIG_DEBUG_INFO=y" >> .config
+echo "CONFIG_DEBUG_INFO_BTF=y" >> .config
+# 开启Full Cone NAT
+echo "CONFIG_NF_NAT_FULLCONENAT=y" >> .config
+
 done
