@@ -11,3 +11,7 @@ CONFIG_BPF_SYSCALL=y
 CONFIG_BPF_JIT=y
 CONFIG_XDP_SOCKETS=y
 CONFIG_XDP_SOCKETS_DIAG=y
+# 勾选DAE所需的依赖包
+echo "CONFIG_PACKAGE_kmod-sched-bpf=y" >> .config
+echo "CONFIG_PACKAGE_vmlinux-btf=y" >> .config
+echo "CONFIG_PACKAGE_v2ray-geosite=y" >> .config
