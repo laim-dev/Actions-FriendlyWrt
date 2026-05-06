@@ -45,19 +45,6 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    # ==================== 开启缓存（关键）====================
-    - name: Cache build cache
-      uses: actions/cache@v3
-      with:
-        path: |
-          project/friendlywrt/dl
-          project/friendlywrt/build_dir
-          project/friendlywrt/staging_dir
-        key: ${{ runner.os }}-friendlywrt-${{ matrix.VERSION }}-${{ matrix.SET }}
-        restore-keys: |
-          ${{ runner.os }}-friendlywrt-${{ matrix.VERSION }}-
-    # =======================================================
-
     - name: Initialization environment
       env:
         DEBIAN_FRONTEND: noninteractive
@@ -170,19 +157,6 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v4
-
-    # ==================== 开启缓存（关键）====================
-    - name: Cache build cache
-      uses: actions/cache@v3
-      with:
-        path: |
-          project/kernel
-          project/u-boot
-          project/rkbin
-        key: ${{ runner.os }}-img-${{ matrix.VERSION }}-${{ matrix.CPU }}-${{ matrix.SET }}
-        restore-keys: |
-          ${{ runner.os }}-img-${{ matrix.VERSION }}-${{ matrix.CPU }}-
-    # =======================================================
 
     - name: Initialization environment
       env:
